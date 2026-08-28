@@ -1,0 +1,23 @@
+# Debian-based SearXNG development stack.
+# Usage from repo root:
+#   docker compose -f container/docker-compose.dev.yml up --build
+name: searxng-dev
+
+services:
+  searxng:
+    container_name: searxng-dev
+    build:
+      context: ..
+      dockerfile: container/dev.dockerfile
+    restart: unless-stopped
+    ports:
+      - "8889:8889"
+    environment:
+      SEARXNG_DEBUG: "1"
+      SEARXNG_SETTINGS_PATH: /etc/searxng/settings.yml
+      GRANIAN_HOST: "::"
+      GRANIAN_PORT: "8889"
+      GRANIAN_RELOAD: "true"
+    volumes:
+      - ..:/usr/local/searxng
+      - ./dev-settings.yml:/etc/searxng/settings.yml:ro

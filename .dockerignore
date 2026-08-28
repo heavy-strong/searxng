@@ -2,5 +2,7 @@
 
 !container/*.template.*
 !container/entrypoint.sh
+!container/dev-entrypoint.sh
+!container/dev-settings.yml
 !searx/**
 !requirements*.txt

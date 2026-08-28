@@ -1,0 +1,42 @@
+# Local development settings. See https://docs.searxng.org/admin/settings/
+use_default_settings: true
+
+general:
+  debug: true
+  instance_name: "SearXNG (dev)"
+
+search:
+  formats:
+    - html
+    - json
+  # CAPTCHA engines recover faster on a private instance
+  suspended_times:
+    SearxEngineCaptcha: 300
+
+server:
+  secret_key: "devsecretkey-change-me"
+  limiter: false
+  image_proxy: true
+  port: 8889
+  bind_address: "0.0.0.0"
+
+# html.duckduckgo.com is CAPTCHA'd by httpx TLS fingerprint.
+# duckduckgo.com (duckduckgo web) works from this host.
+# Startpage blocks this egress IP (KT KR) at captcha-block.
+outgoing:
+  request_timeout: 5.0
+  enable_http2: false
+  source_ips:
+    - 0.0.0.0
+
+engines:
+  - name: duckduckgo
+    disabled: false
+  - name: duckduckgo web
+    disabled: false
+  - name: startpage
+    disabled: false
+  - name: startpage news
+    disabled: false
+  - name: startpage images
+    disabled: false
