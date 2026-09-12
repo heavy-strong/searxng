@@ -1,5 +1,13 @@
 use_default_settings: true
 
+search:
+  # Vane calls /search with format=json for web, image, and video search.
+  formats:
+    - html
+    - json
+
 server:
   secret_key: "470c6d3ffe853fe87c82ad13c246213f9e61ca3fca39452b2c2bf59a9ddbe855"
+  # This instance is only exposed on localhost for Vane's API requests.
+  limiter: false
   image_proxy: true
