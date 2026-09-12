@@ -1,0 +1,5 @@
+use_default_settings: true
+
+server:
+  secret_key: "470c6d3ffe853fe87c82ad13c246213f9e61ca3fca39452b2c2bf59a9ddbe855"
+  image_proxy: true
