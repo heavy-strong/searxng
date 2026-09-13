@@ -11,9 +11,16 @@ services:
     ports:
       - ${SEARXNG_HOST:+${SEARXNG_HOST}:}${SEARXNG_PORT:-8080}:${SEARXNG_PORT:-8080}
     env_file: ./.env
+    environment:
+      # The image ships unchecked-hash .pyc files, which would shadow the
+      # bind-mounted engine sources below. Point the bytecode cache elsewhere.
+      PYTHONPYCACHEPREFIX: /tmp/pycache
     volumes:
       - ./core-config/:/etc/searxng/:Z
       - core-data:/var/cache/searxng/
+      # Patched Naver engine (image/video parsers updated for the current
+      # Naver DOM, YouTube embeds). Remove once upstream ships the fix.
+      - ../searx/engines/naver.py:/usr/local/searxng/searx/engines/naver.py:ro
 
   valkey:
     container_name: searxng-valkey

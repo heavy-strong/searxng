@@ -11,3 +11,15 @@ server:
   # This instance is only exposed on localhost for Vane's API requests.
   limiter: false
   image_proxy: true
+
+engines:
+  # Korean engines (Naver) — enabled so they join default searches and show
+  # up as "enabled" in Vane's engine picker.
+  - name: naver
+    disabled: false
+  - name: naver news
+    disabled: false
+  - name: naver images
+    disabled: false
+  - name: naver videos
+    disabled: false

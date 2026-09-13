@@ -2,9 +2,10 @@
 # pylint: disable=line-too-long
 """Naver for SearXNG"""
 
+import re
 import typing as t
 
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse, parse_qs
 from lxml import html
 
 from searx.exceptions import SearxEngineAPIException, SearxEngineXPathException
@@ -14,7 +15,6 @@ from searx.utils import (
     eval_xpath_list,
     eval_xpath,
     extract_text,
-    extr,
     html_to_text,
     parse_duration_string,
     js_obj_str_to_python,
@@ -136,7 +136,13 @@ def parse_general(data):
 def parse_images(data):
     results = []
 
-    match = extr(data, '<script>var imageSearchTabData=', '</script>')
+    # The data object is embedded as ``var imageSearchTabData = {...}`` inside a
+    # <script> tag whose attributes / whitespace vary, so anchor on the variable.
+    match = None
+    var_match = re.search(r'var\s+imageSearchTabData\s*=\s*', data)
+    if var_match:
+        match = data[var_match.end() :].split('</script>', 1)[0].strip().rstrip(';')
+
     if match:
         json = js_obj_str_to_python(match.strip())
         items = json.get('content', {}).get('items', [])
@@ -193,34 +199,98 @@ def parse_news(data):
     return results
 
 
+def _youtube_embed_url(url: str) -> str | None:
+    """Return an embeddable player URL when ``url`` points at a YouTube video."""
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return None
+
+    host = (parsed.hostname or "").lower()
+    video_id = None
+
+    if host in ("www.youtube.com", "youtube.com", "m.youtube.com"):
+        if parsed.path == "/watch":
+            video_id = parse_qs(parsed.query).get("v", [None])[0]
+        elif parsed.path.startswith(("/shorts/", "/embed/")):
+            video_id = parsed.path.split("/")[2] if len(parsed.path.split("/")) > 2 else None
+    elif host == "youtu.be":
+        video_id = parsed.path.lstrip("/").split("/")[0] or None
+
+    if video_id and re.fullmatch(r"[A-Za-z0-9_-]{6,}", video_id):
+        return f"https://www.youtube.com/embed/{video_id}"
+
+    return None
+
+
 def parse_videos(data):
     res = EngineResults()
 
     dom = html.fromstring(data)
 
-    for item in eval_xpath_list(dom, "//li[contains(@class, 'video_item')]"):
-        url = eval_xpath_getindex(item, ".//a[contains(@class, 'info_title')]/@href", 0)
+    # Each result is a container holding a thumbnail link
+    # (``fds-video-thumbnail-size``) and a title block
+    # (``fds-video-title-with-profile``).
+    for title_block in eval_xpath_list(dom, "//div[contains(@class, 'fds-video-title-with-profile')]"):
+        item = title_block.getparent()
+        if item is None:
+            continue
+
+        url = None
+        try:
+            url = eval_xpath_getindex(title_block, ".//a[starts-with(@href, 'http')]/@href", 0)
+        except (ValueError, TypeError, SearxEngineXPathException):
+            pass
+
+        title = extract_text(eval_xpath(title_block, ".//span[contains(@class, 'sds-comps-text-type-headline')]"))
+
+        if not url or not title:
+            continue
 
         thumbnail = None
         try:
-            thumbnail = eval_xpath_getindex(item, ".//img[contains(@class, 'thumb')]/@src", 0)
+            thumbnail = eval_xpath_getindex(
+                item, ".//a[contains(@class, 'fds-video-thumbnail-size')]//img[@src]/@src", 0
+            )
         except (ValueError, TypeError, SearxEngineXPathException):
             pass
 
         length = None
         try:
-            length = parse_duration_string(extract_text(eval_xpath(item, ".//span[contains(@class, 'time')]")) or "")
+            length = parse_duration_string(
+                extract_text(
+                    eval_xpath(
+                        item,
+                        ".//a[contains(@class, 'fds-video-thumbnail-size')]//span[contains(@class, 'sds-comps-text-type-footnote')]",
+                    )
+                )
+                or ""
+            )
         except (ValueError, TypeError):
             pass
 
-        res.add(
-            res.types.LegacyResult(
-                template="videos.html",
-                title=extract_text(eval_xpath(item, ".//a[contains(@class, 'info_title')]")),
-                url=url,
-                thumbnail=thumbnail,
-                length=length,
+        # channel / uploader name; direct text only to skip the "opens in new
+        # window" screen-reader hint nested in the link
+        content = extract_text(
+            eval_xpath(
+                title_block,
+                "(.//span[contains(@class, 'sds-comps-profile-info-title-text')]//a/span[contains(@class, 'sds-comps-text-type')])[1]",
             )
         )
+
+        result = {
+            "template": "videos.html",
+            "title": title,
+            "url": url,
+            "content": content or "",
+            "thumbnail": thumbnail,
+            "length": length,
+        }
+
+        iframe_src = _youtube_embed_url(url)
+        if iframe_src:
+            result["iframe_src"] = iframe_src
+
+        res.add(res.types.LegacyResult(**result))
 
     return res
